@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스마트 이미지 정렬기 (Smart Image Sorter)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- 헤더 -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo-area">
+          <div class="logo-icon">✨</div>
+          <div>
+            <h1>Smart Image Sorter</h1>
+            <p class="subtitle">이미지 내용(CLIP) + 파일명으로 프롬프트 번호 자동 매칭 · 100% 로컬</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="btnUndo" class="btn btn-secondary" title="직전 파일명 변경 내역을 원래대로 되돌립니다">
+            <span class="icon">↺</span> 변경 되돌리기 (Undo)
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 메인 컨테이너 -->
+    <main class="main-content">
+      <!-- 1단계: 입력 섹션 (설정 카드) -->
+      <section class="config-grid">
+        <!-- TXT 파일 업로드 카드 -->
+        <div class="glass-card upload-card">
+          <div class="card-header">
+            <div class="step-badge">Step 1</div>
+            <h3>프롬프트 TXT 파일 업로드</h3>
+          </div>
+          <div class="dropzone" id="txtDropzone">
+            <input type="file" id="txtFileInput" accept=".txt" hidden>
+            <div class="dropzone-inner">
+              <div class="upload-icon">📄</div>
+              <p class="dropzone-text"><strong>TXT 파일을 여기로 드래그</strong>하거나 클릭하여 선택</p>
+              <span class="dropzone-hint">1. @프롬프트, 01. 내용 등 번호 목록이 적힌 텍스트</span>
+            </div>
+          </div>
+          <!-- 경로 직접 입력 보조 -->
+          <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <input type="text" id="txtDirectPathInput" placeholder="또는 TXT 파일 전체 경로 직접 입력..." style="background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:6px; padding:6px 10px; font-size:12px; flex:1; color:#fff;">
+            <button id="btnLoadDirectTxt" class="btn-inline">불러오기</button>
+          </div>
+          <div id="txtFileInfo" class="file-status-banner hidden">
+            <span class="status-icon">✓</span>
+            <div class="file-details">
+              <span id="txtFileName" class="file-name">filename.txt</span>
+              <span id="txtParsedCount" class="badge badge-accent">0개 항목 감지됨</span>
+            </div>
+            <button id="btnRemoveTxt" class="btn-icon" title="파일 취소">✕</button>
+          </div>
+        </div>
+
+        <!-- 이미지 폴더 경로 입력 카드 -->
+        <div class="glass-card folder-card">
+          <div class="card-header">
+            <div class="step-badge">Step 2</div>
+            <h3>이미지 폴더 경로 입력</h3>
+          </div>
+          <div class="folder-input-wrapper">
+            <div class="input-group">
+              <span class="input-icon">📁</span>
+              <input type="text" id="folderPathInput" placeholder="예: C:\Users\USER\Pictures\AI_Scenes" spellcheck="false">
+              <button id="btnPastePath" class="btn-inline" title="클립보드에서 경로 붙여넣기">붙여넣기</button>
+            </div>
+            <p class="input-help">정리할 이미지들(.png, .jpg, .webp)이 들어있는 <strong>로컬 전체 경로</strong>를 입력하세요.</p>
+          </div>
+
+          <!-- 파일명 양식 설정 -->
+          <div class="format-options">
+            <label class="option-label">정렬 파일명 규칙:</label>
+            <div class="radio-group">
+              <label class="radio-chip active">
+                <input type="radio" name="nameFormat" value="scene" checked>
+                <span>01_scene.png</span>
+              </label>
+              <label class="radio-chip">
+                <input type="radio" name="nameFormat" value="num_only">
+                <span>01.png</span>
+              </label>
+              <label class="radio-chip">
+                <input type="radio" name="nameFormat" value="orig">
+                <span>01_원본이름.png</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button id="btnScan" class="btn btn-primary btn-large w-100">
+              <span class="icon">🔍</span> 이미지 내용 분석 및 매칭 시작
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2단계: 분석 결과 대시보드 -->
+      <section id="resultsSection" class="results-section hidden">
+        <!-- 상태 요약 KPI 카드 -->
+        <div class="dashboard-stats">
+          <div class="stat-card" data-filter="all">
+            <div class="stat-icon stat-total">📋</div>
+            <div class="stat-body">
+              <span class="stat-label">전체 마스터 항목</span>
+              <span id="statTotalTxt" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="matched">
+            <div class="stat-icon stat-success">✅</div>
+            <div class="stat-body">
+              <span class="stat-label">1:1 매칭</span>
+              <span id="statMatched" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="review">
+            <div class="stat-icon stat-warning">👀</div>
+            <div class="stat-body">
+              <span class="stat-label">확인 필요</span>
+              <span id="statReview" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="duplicate">
+            <div class="stat-icon stat-warning">⚠️</div>
+            <div class="stat-body">
+              <span class="stat-label">같은 번호 여러 장</span>
+              <span id="statDuplicate" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="missing">
+            <div class="stat-icon stat-danger">❌</div>
+            <div class="stat-body">
+              <span class="stat-label">누락된 번호</span>
+              <span id="statMissing" class="stat-value">0</span>
+            </div>
+          </div>
+          <div class="stat-card" data-filter="unassigned">
+            <div class="stat-icon stat-neutral">❓</div>
+            <div class="stat-body">
+              <span class="stat-label">미분류 이미지</span>
+              <span id="statUnassigned" class="stat-value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 필터 및 컨트롤 바 -->
+        <div class="toolbar-wrapper glass-card">
+          <div class="filter-tabs">
+            <button class="tab-btn active" data-tab="all">전체 보기 (<span id="countAll">0</span>)</button>
+            <button class="tab-btn" data-tab="review">👀 확인 필요 (<span id="countReview">0</span>)</button>
+            <button class="tab-btn" data-tab="missing">❌ 누락만 (<span id="countMissing">0</span>)</button>
+            <button class="tab-btn" data-tab="duplicate">⚠️ 중복만 (<span id="countDuplicate">0</span>)</button>
+            <button class="tab-btn" data-tab="matched">✅ 1:1 매칭 (<span id="countMatched">0</span>)</button>
+            <button class="tab-btn" data-tab="unassigned">❓ 미분류 이미지 (<span id="countUnassigned">0</span>)</button>
+          </div>
+          <div class="toolbar-right">
+            <button id="btnExecuteRename" class="btn btn-accent btn-large">
+              <span class="icon">⚡</span> <span id="renameButtonLabel">파일명 일괄 변경 실행</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 매칭 결과 목록 컨테이너 -->
+        <div id="cardsList" class="cards-list">
+          <!-- 동적으로 생성되는 매칭 카드들 -->
+        </div>
+
+        <!-- 미분류 이미지 컨테이너 (별도 섹션) -->
+        <div id="unassignedSection" class="unassigned-container glass-card hidden">
+          <div class="unassigned-header">
+            <h4>❓ TXT 목록과 매칭되지 않은 남은 이미지들</h4>
+            <p class="hint">직접 미분류로 뺀 이미지들입니다. 번호를 고르면 해당 번호로 배정되고, 그대로 두면 파일명을 바꾸지 않습니다.</p>
+          </div>
+          <div id="unassignedGrid" class="unassigned-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 이미지 확대 모달 -->
+    <div id="imageModal" class="modal-backdrop hidden">
+      <div class="modal-content">
+        <button id="btnCloseModal" class="btn-close-modal">✕</button>
+        <img id="modalImg" src="" alt="확대 이미지">
+        <div id="modalCaption" class="modal-caption"></div>
+      </div>
+    </div>
+
+    <!-- 로딩 오버레이 -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loadingMessage">이미지 메타데이터 분석 중...</p>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
